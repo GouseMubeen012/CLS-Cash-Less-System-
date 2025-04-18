@@ -1,38 +1,102 @@
-# Bank Admin Website - Cashless Student Transaction System
+# CLS - Cash-Less System
 
-## Project Structure
-- `frontend/` - React.js frontend application
-- `backend/` - Node.js + Express backend application
+This project is a full-stack cashless transaction management system for educational institutions or stores. It includes a backend (Node.js/Express), two frontends (admin and store/staff), and is fully dockerized for easy deployment.
 
-## Setup Instructions
-
-### Backend Setup
-1. Navigate to backend directory: `cd backend`
-2. Install dependencies: `npm install`
-3. Create PostgreSQL database
-4. Update `.env` file with database credentials
-5. Run migrations: `npm run migrate`
-6. Start server: `npm run dev`
-
-### Frontend Setup
-1. Navigate to frontend directory: `cd frontend`
-2. Install dependencies: `npm install`
-3. Start development server: `npm start`
+---
 
 ## Features
-- Bank Admin Authentication
-- Student Registration with QR Code Generation
-- Store Registration
-- Student Account Management
-- Balance Recharge System
-- Settlement Management
-- Analytics Dashboard
+- Student registration and management
+- Store registration and management
+- QR code-based student identification
+- Transaction processing and daily statistics
+- Settlement management for stores
+- Real-time updates using WebSockets
+- Admin and store/staff dashboards
+- Fully dockerized setup for production or local development
 
-## Default Admin Credentials
-- Email: admin@gmail.com
-- Password: admin123
+---
 
+## Project Structure
 
+- `backend/` : Node.js/Express backend API, database migrations, and uploads
+- `frontend/` : React admin dashboard (for students, stores, analytics, settlements)
+- `store-frontend/` : React dashboard for store/staff (QR scanning, transactions, settlements)
+- `docker-compose.yml` : Multi-service orchestration for backend, frontends, and database
+- `.gitignore` : Ensures node_modules and build artifacts are not tracked
 
+---
 
+## Quick Start (Docker)
 
+1. **Clone the repository:**
+   ```sh
+   git clone https://github.com/GouseMubeen012/CLS-Cash-Less-System-.git
+   cd CLS-Cash-Less-System-
+   ```
+2. **Configure environment variables:**
+   - Edit `backend/.env` for your Postgres DB credentials and secrets.
+3. **Build and run with Docker Compose:**
+   ```sh
+   docker-compose build
+   docker-compose up -d
+   ```
+4. **Run database migrations:**
+   ```sh
+   docker-compose exec backend node src/db/migrations.js
+   ```
+5. **Access the app:**
+   - Admin UI: http://localhost:3000
+   - Store UI: http://localhost:4000
+   - Backend API: http://localhost:5000
+
+---
+
+## Manual Setup (Without Docker)
+
+### Backend
+```sh
+cd backend
+npm install
+# Configure backend/.env
+cd src/db
+node migrations.js
+cd ../..
+npm start
+```
+
+### Frontend
+```sh
+cd frontend
+npm install
+npm start  # or npm run build
+```
+
+### Store Frontend
+```sh
+cd store-frontend
+npm install
+npm start  # or npm run build
+```
+
+---
+
+## Deployment
+- See `deployment_guide.txt` for a detailed, step-by-step deployment guide.
+- For cloud or production deployment, configure your environment variables, set up SSL, and use a reverse proxy (Nginx/Apache) as needed.
+
+---
+
+## Contributing
+- Fork the repo and create a feature branch.
+- Submit pull requests with clear descriptions.
+
+---
+
+## License
+This project is for educational and demonstration purposes. For production use, please review and update security, environment, and compliance settings.
+
+---
+
+## Author
+MOHAMMED GOUSE MUBEEN
+https://github.com/GouseMubeen012
