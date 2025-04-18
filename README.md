@@ -40,10 +40,13 @@ This project is a full-stack cashless transaction management system for educatio
    docker-compose build
    docker-compose up -d
    ```
-4. **Run database migrations:**
+
+4. **Initialize the database (Required!):**
+   > **Important:** After starting the containers for the first time on a new machine or database, you MUST run the migrations script to set up the database schema. Without this, your backend will not function correctly (no tables will exist).
    ```sh
    docker-compose exec backend node src/db/migrations.js
    ```
+
 5. **Access the app:**
    - Admin UI: http://localhost:3000
    - Store UI: http://localhost:4000
@@ -77,23 +80,6 @@ cd store-frontend
 npm install
 npm start  # or npm run build
 ```
-
----
-
-## Deployment
-- See `deployment_guide.txt` for a detailed, step-by-step deployment guide.
-- For cloud or production deployment, configure your environment variables, set up SSL, and use a reverse proxy (Nginx/Apache) as needed.
-
----
-
-## Contributing
-- Fork the repo and create a feature branch.
-- Submit pull requests with clear descriptions.
-
----
-
-## License
-This project is for educational and demonstration purposes. For production use, please review and update security, environment, and compliance settings.
 
 ---
 
