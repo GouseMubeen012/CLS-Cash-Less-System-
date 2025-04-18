@@ -1,0 +1,411 @@
+# AWS Deployment Guide for CLS Application
+
+This guide will walk you through deploying the CLS application on AWS using EC2 instances and RDS for PostgreSQL.
+
+## 1. Prerequisites
+
+Before you begin, make sure you have:
+- An AWS account
+- AWS CLI installed and configured with your credentials
+- Basic understanding of AWS services
+- Your CLS application code ready for deployment
+
+## 2. AWS Services We'll Use
+
+- **EC2**: For hosting the application containers
+- **RDS**: For PostgreSQL database (optional, since you mentioned using local database)
+- **ECR**: For storing Docker images (optional)
+- **ELB**: For load balancing (optional for production setup)
+- **Route 53**: For domain management (optional)
+
+## 3. Setting Up AWS Infrastructure
+
+### 3.1. Create a VPC (if you don't already have one)
+
+1. Go to AWS Management Console > VPC
+2. Click "Create VPC"
+3. Enter a name (e.g., "CLS-VPC")
+4. Set IPv4 CIDR block (e.g., 10.0.0.0/16)
+5. Click "Create VPC"
+
+### 3.2. Create Subnets
+
+1. Go to Subnets in the VPC Dashboard
+2. Create at least two subnets in different availability zones
+3. Example:
+   - Subnet 1: Name: "CLS-Public-1", AZ: us-east-1a, CIDR: 10.0.1.0/24
+   - Subnet 2: Name: "CLS-Public-2", AZ: us-east-1b, CIDR: 10.0.2.0/24
+
+### 3.3. Create Internet Gateway
+
+1. Go to Internet Gateways in the VPC Dashboard
+2. Click "Create internet gateway"
+3. Name it (e.g., "CLS-IGW")
+4. Attach it to your VPC
+
+### 3.4. Update Route Tables
+
+1. Go to Route Tables in the VPC Dashboard
+2. Create a new route table or use the default one
+3. Add a route: Destination: 0.0.0.0/0, Target: Your Internet Gateway
+4. Associate the route table with your public subnets
+
+## 4. Setting Up EC2 Instance
+
+### 4.1. Launch an EC2 Instance
+
+1. Go to EC2 Dashboard
+2. Click "Launch Instance"
+3. Choose an Amazon Machine Image (AMI)
+   - Recommended: Amazon Linux 2 or Ubuntu Server 20.04 LTS
+4. Choose an Instance Type
+   - Recommended: t2.medium or larger for production
+5. Configure Instance:
+   - VPC: Your CLS-VPC
+   - Subnet: One of your public subnets
+   - Auto-assign Public IP: Enable
+6. Add Storage:
+   - Root volume: 30 GB (or more depending on your needs)
+7. Add Tags:
+   - Key: Name, Value: CLS-Server
+8. Configure Security Group:
+   - Create a new security group
+   - Add rules:
+     - SSH (22) from your IP
+     - HTTP (80) from anywhere
+     - HTTPS (443) from anywhere
+     - Custom TCP (3000, 4000, 5000) from anywhere (for development)
+9. Review and Launch
+10. Create or select an existing key pair for SSH access
+
+### 4.2. Connect to Your EC2 Instance
+
+```bash
+ssh -i /path/to/your-key.pem ec2-user@your-instance-public-ip
+```
+(Use 'ubuntu' instead of 'ec2-user' if you chose Ubuntu AMI)
+
+## 5. Installing Docker on EC2
+
+Run the following commands on your EC2 instance:
+
+```bash
+# Update package index
+sudo yum update -y   # For Amazon Linux
+# OR
+sudo apt update      # For Ubuntu
+
+# Install Docker
+sudo amazon-linux-extras install docker -y   # For Amazon Linux
+# OR
+sudo apt install docker.io -y                # For Ubuntu
+
+# Start and enable Docker
+sudo systemctl start docker
+sudo systemctl enable docker
+
+# Add your user to the docker group
+sudo usermod -aG docker $USER
+
+# Install Docker Compose
+sudo curl -L "https://github.com/docker/compose/releases/download/v2.20.3/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+
+# Verify installations
+docker --version
+docker-compose --version
+
+# Log out and log back in for group changes to take effect
+exit
+```
+
+Reconnect to your instance after logging out.
+
+## 6. Deploying the Application
+
+### 6.1. Clone Your Repository
+
+```bash
+# Install git if needed
+sudo yum install git -y   # For Amazon Linux
+# OR
+sudo apt install git -y   # For Ubuntu
+
+# Clone your repository
+git clone https://your-repository-url.git
+cd your-repository-directory
+```
+
+### 6.2. Configure Database Connection
+
+If you're using a local database on your EC2 instance:
+
+```bash
+# Install PostgreSQL
+sudo yum install postgresql postgresql-server -y   # For Amazon Linux
+# OR
+sudo apt install postgresql postgresql-contrib -y  # For Ubuntu
+
+# Initialize the database
+sudo postgresql-setup initdb   # For Amazon Linux
+# OR
+sudo pg_createcluster 12 main  # For Ubuntu (if not already created)
+
+# Start and enable PostgreSQL
+sudo systemctl start postgresql
+sudo systemctl enable postgresql
+
+# Create database and user
+sudo -u postgres psql -c "CREATE DATABASE bank_admin_db;"
+sudo -u postgres psql -c "CREATE USER postgres WITH ENCRYPTED PASSWORD 'admin123';"
+sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE bank_admin_db TO postgres;"
+
+# Edit PostgreSQL configuration to allow connections
+sudo nano /var/lib/pgsql/data/pg_hba.conf   # For Amazon Linux
+# OR
+sudo nano /etc/postgresql/12/main/pg_hba.conf  # For Ubuntu
+
+# Add the following line (replace with appropriate settings)
+# host    all             all             0.0.0.0/0               md5
+
+# Edit postgresql.conf to listen on all interfaces
+sudo nano /var/lib/pgsql/data/postgresql.conf   # For Amazon Linux
+# OR
+sudo nano /etc/postgresql/12/main/postgresql.conf  # For Ubuntu
+
+# Find the line with listen_addresses and change it to:
+# listen_addresses = '*'
+
+# Restart PostgreSQL
+sudo systemctl restart postgresql
+```
+
+### 6.3. Update Environment Variables
+
+Edit the backend .env file to point to your local PostgreSQL:
+
+```bash
+nano backend/.env
+```
+
+Update the file with:
+```
+PORT=5000
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=bank_admin_db
+DB_USER=postgres
+DB_PASSWORD=admin123
+JWT_SECRET=your-secret-key-here
+```
+
+### 6.4. Build and Run with Docker Compose
+
+```bash
+# Build and start the containers
+docker-compose build
+docker-compose up -d
+
+# Verify the containers are running
+docker-compose ps
+```
+
+## 7. Setting Up Domain and HTTPS (Optional)
+
+### 7.1. Register a Domain with Route 53 (or use an existing domain)
+
+1. Go to Route 53 in AWS Console
+2. Register a new domain or use an existing one
+3. Create a hosted zone for your domain
+
+### 7.2. Create DNS Records
+
+1. Create an A record pointing to your EC2 instance's public IP
+2. Example:
+   - Name: cls.yourdomain.com
+   - Type: A
+   - Value: Your EC2 instance's public IP
+   - TTL: 300
+
+### 7.3. Install and Configure Nginx as a Reverse Proxy
+
+```bash
+# Install Nginx
+sudo yum install nginx -y   # For Amazon Linux
+# OR
+sudo apt install nginx -y   # For Ubuntu
+
+# Start and enable Nginx
+sudo systemctl start nginx
+sudo systemctl enable nginx
+```
+
+Create an Nginx configuration file:
+
+```bash
+sudo nano /etc/nginx/conf.d/cls.conf
+```
+
+Add the following configuration:
+
+```nginx
+server {
+    listen 80;
+    server_name cls.yourdomain.com;
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    location /store {
+        proxy_pass http://localhost:4000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    location /api {
+        proxy_pass http://localhost:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    location /socket.io {
+        proxy_pass http://localhost:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+### 7.4. Set Up HTTPS with Let's Encrypt
+
+```bash
+# Install Certbot
+sudo yum install certbot python-certbot-nginx -y   # For Amazon Linux
+# OR
+sudo apt install certbot python3-certbot-nginx -y  # For Ubuntu
+
+# Obtain and install SSL certificate
+sudo certbot --nginx -d cls.yourdomain.com
+
+# Follow the prompts to complete the setup
+# Certbot will automatically update your Nginx configuration
+```
+
+## 8. Continuous Deployment (Optional)
+
+### 8.1. Set Up GitHub Actions for CI/CD
+
+Create a file at `.github/workflows/deploy.yml` in your repository:
+
+```yaml
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+    
+    - name: Deploy to EC2
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ec2-user
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          cd /path/to/your/app
+          git pull
+          docker-compose down
+          docker-compose build
+          docker-compose up -d
+```
+
+Add the necessary secrets to your GitHub repository.
+
+## 9. Monitoring and Maintenance
+
+### 9.1. Set Up CloudWatch for Monitoring
+
+1. Install CloudWatch agent on your EC2 instance
+2. Configure it to monitor system metrics and logs
+3. Set up alarms for important metrics
+
+### 9.2. Regular Maintenance Tasks
+
+```bash
+# Update system packages
+sudo yum update -y   # For Amazon Linux
+# OR
+sudo apt update && sudo apt upgrade -y   # For Ubuntu
+
+# Clean up Docker resources
+docker system prune -af --volumes
+
+# Backup your database regularly
+pg_dump -U postgres bank_admin_db > backup_$(date +%Y%m%d).sql
+
+# Check disk space
+df -h
+
+# Check running services
+docker-compose ps
+systemctl status nginx
+systemctl status postgresql
+```
+
+## 10. Scaling (for Future Growth)
+
+As your application grows, consider:
+
+1. Using Amazon RDS for PostgreSQL instead of a local database
+2. Setting up an Auto Scaling Group for EC2 instances
+3. Using Elastic Load Balancer to distribute traffic
+4. Implementing Amazon ECR for Docker image storage
+5. Using ECS or EKS for container orchestration
+
+## 11. Troubleshooting
+
+### EC2 Connection Issues
+- Verify your security group allows SSH from your IP
+- Check that your key pair is correct and has proper permissions
+
+### Docker Issues
+- Check Docker logs: `docker-compose logs`
+- Verify Docker is running: `systemctl status docker`
+
+### Database Connection Issues
+- Verify PostgreSQL is running: `systemctl status postgresql`
+- Check database connection settings in your .env file
+- Verify PostgreSQL configuration allows connections
+
+### Web Access Issues
+- Check Nginx configuration and logs: `nginx -t` and `cat /var/log/nginx/error.log`
+- Verify security groups allow HTTP/HTTPS traffic
+- Check that your containers are running: `docker-compose ps`
